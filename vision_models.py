@@ -1155,32 +1155,28 @@ class BLIPModel(BaseModel):
     name = 'blip'
     to_batch = True
     max_batch_size = 32
-    seconds_collect_data = 0.2  # The queue has additionally the time it is executing the previous forward pass
+    seconds_collect_data = 0.2
 
-    def __init__(self, gpu_number=0, half_precision=config.blip_half_precision,
-                 blip_v2_model_type=config.blip_v2_model_type):
+    def __init__(self, gpu_number=0, half_precision=config.blip_half_precision):
         super().__init__(gpu_number)
 
-        # from lavis.models import load_model_and_preprocess
         from transformers import Blip2Processor, Blip2ForConditionalGeneration
 
-        # https://huggingface.co/models?sort=downloads&search=Salesforce%2Fblip2-
-        assert blip_v2_model_type in ['blip2-flan-t5-xxl', 'blip2-flan-t5-xl', 'blip2-opt-2.7b', 'blip2-opt-6.7b',
-                                      'blip2-opt-2.7b-coco', 'blip2-flan-t5-xl-coco', 'blip2-opt-6.7b-coco']
-
+        model_name = "Salesforce/blip2-flan-t5-xl"  # Changed from blip2-opt-2.7b
+        
         with warnings.catch_warnings(), HiddenPrints("BLIP"), torch.cuda.device(self.dev):
             max_memory = {gpu_number: torch.cuda.mem_get_info(self.dev)[0]}
 
-            self.processor = Blip2Processor.from_pretrained(f"Salesforce/{blip_v2_model_type}")
-            # Device_map must be sequential for manual GPU selection
+            self.processor = Blip2Processor.from_pretrained(model_name)
             try:
                 self.model = Blip2ForConditionalGeneration.from_pretrained(
-                    f"Salesforce/{blip_v2_model_type}", load_in_8bit=half_precision,
+                    model_name,  
+                    load_in_8bit=half_precision,
                     torch_dtype=torch.float16 if half_precision else "auto",
-                    device_map="sequential", max_memory=max_memory
+                    device_map="sequential", 
+                    max_memory=max_memory
                 )
             except Exception as e:
-                # Clarify error message. The problem is that it tries to load part of the model to disk.
                 if "had weights offloaded to the disk" in e.args[0]:
                     extra_text = ' You may want to consider setting half_precision to True.' if half_precision else ''
                     raise MemoryError(f"Not enough GPU memory in GPU {self.dev} to load the model.{extra_text}")
